@@ -31,7 +31,14 @@
 #include <re_sa.h>
 #include <re_net.h>
 #include <re_udp.h>
-
+#ifdef WIN32
+typedef UINT32 QOS_FLOWID, *PQOS_FLOWID;
+#ifndef QOS_NON_ADAPTIVE_FLOW
+#define QOS_NON_ADAPTIVE_FLOW 0x00000002
+#endif
+#include <winsock2.h>
+#include <qos2.h>
+#endif
 
 #define DEBUG_MODULE "udp"
 #define DEBUG_LEVEL 5
@@ -67,6 +74,11 @@ struct udp_sock {
 	bool conn;           /**< Connected socket flag       */
 	size_t rxsz;         /**< Maximum receive chunk size  */
 	size_t rx_presz;     /**< Preallocated rx buffer size */
+#ifdef WIN32
+	HANDLE qos;          /**< QOS subsystem handle        */
+	QOS_FLOWID qos_id;   /**< QOS IPv4 flow id            */
+	QOS_FLOWID qos_id6;  /**< QOS IPv6 flow id            */
+#endif
 };
 
 /** Defines a UDP helper */
@@ -124,6 +136,12 @@ static void udp_destructor(void *data)
 		fd_close(us->fd6);
 		(void)close(us->fd6);
 	}
+#ifdef WIN32
+	if (us->qos && us->qos_id)
+		(void)QOSRemoveSocketFromFlow(us->qos, 0, us->qos_id, 0);
+	if (us->qos && us->qos_id6)
+		(void)QOSRemoveSocketFromFlow(us->qos, 0, us->qos_id6, 0);
+#endif
 }
 
 
@@ -643,10 +661,37 @@ int udp_settos(struct udp_sock *us, uint8_t tos)
 {
 	int err = 0;
 	int v = tos;
-
+#ifdef WIN32
+	QOS_VERSION QosVersion = { 1 , 0 };
+#endif
 	if (!us)
 		return EINVAL;
 
+#ifdef WIN32
+	err = QOSCreateHandle(&QosVersion, &us->qos);
+	if (!err)
+		return GetLastError();
+
+	us->qos_id = 0;
+	if (-1 != us->fd) {
+		err = QOSAddSocketToFlow(us->qos, us->fd, NULL,
+				QOSTrafficTypeAudioVideo,
+				QOS_NON_ADAPTIVE_FLOW,
+				&us->qos_id);
+		if (!err)
+			return WSAGetLastError();
+	}
+
+	us->qos_id6 = 0;
+	if (-1 != us->fd6) {
+		err = QOSAddSocketToFlow(us->qos, us->fd6, NULL,
+				QOSTrafficTypeAudioVideo,
+				QOS_NON_ADAPTIVE_FLOW,
+				&us->qos_id6);
+		if (!err)
+			return WSAGetLastError();
+	}
+#endif
 	err = udp_setsockopt(us, IPPROTO_IP, IP_TOS, &v, sizeof(v));
 	return err;
 }
