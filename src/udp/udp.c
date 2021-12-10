@@ -127,6 +127,15 @@ static void udp_destructor(void *data)
 
 	list_flush(&us->helpers);
 
+#ifdef WIN32
+	if (us->qos && us->qos_id)
+		(void)QOSRemoveSocketFromFlow(us->qos, 0, us->qos_id, 0);
+	if (us->qos && us->qos_id6)
+		(void)QOSRemoveSocketFromFlow(us->qos, 0, us->qos_id6, 0);
+	if (us->qos)
+		(void)QOSCloseHandle(us->qos);
+#endif
+
 	if (-1 != us->fd) {
 		fd_close(us->fd);
 		(void)close(us->fd);
@@ -136,12 +145,6 @@ static void udp_destructor(void *data)
 		fd_close(us->fd6);
 		(void)close(us->fd6);
 	}
-#ifdef WIN32
-	if (us->qos && us->qos_id)
-		(void)QOSRemoveSocketFromFlow(us->qos, 0, us->qos_id, 0);
-	if (us->qos && us->qos_id6)
-		(void)QOSRemoveSocketFromFlow(us->qos, 0, us->qos_id6, 0);
-#endif
 }
 
 
