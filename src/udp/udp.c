@@ -662,20 +662,31 @@ int udp_settos(struct udp_sock *us, uint8_t tos)
 	int err = 0;
 	int v = tos;
 #ifdef WIN32
-	QOS_VERSION QosVersion = { 1 , 0 };
+	QOS_VERSION qos_version = { 1 , 0 };
+	QOS_TRAFFIC_TYPE qos_type = QOSTrafficTypeBestEffort;
+	if (tos >= 32) /* >= DSCP_CS1 */
+		qos_type = QOSTrafficTypeBackground;
+	if (tos >= 40) /* >= DSCP_AF11 */
+		qos_type = QOSTrafficTypeExcellentEffort;
+	if (tos >= 136) /* >= DSCP_AF41 */
+		qos_type = QOSTrafficTypeAudioVideo;
+	if (tos >= 184) /* >= DSCP_EF */
+		qos_type = QOSTrafficTypeVoice;
+	if (tos >= 224) /* >= DSCP_CS7 */
+		qos_type = QOSTrafficTypeControl;
 #endif
 	if (!us)
 		return EINVAL;
 
 #ifdef WIN32
-	err = QOSCreateHandle(&QosVersion, &us->qos);
+	err = QOSCreateHandle(&qos_version, &us->qos);
 	if (!err)
 		return GetLastError();
 
 	us->qos_id = 0;
 	if (-1 != us->fd) {
 		err = QOSAddSocketToFlow(us->qos, us->fd, NULL,
-				QOSTrafficTypeAudioVideo,
+				qos_type,
 				QOS_NON_ADAPTIVE_FLOW,
 				&us->qos_id);
 		if (!err)
@@ -685,7 +696,7 @@ int udp_settos(struct udp_sock *us, uint8_t tos)
 	us->qos_id6 = 0;
 	if (-1 != us->fd6) {
 		err = QOSAddSocketToFlow(us->qos, us->fd6, NULL,
-				QOSTrafficTypeAudioVideo,
+				qos_type,
 				QOS_NON_ADAPTIVE_FLOW,
 				&us->qos_id6);
 		if (!err)
