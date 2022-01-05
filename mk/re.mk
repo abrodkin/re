@@ -45,6 +45,11 @@
 #
 
 
+# Verbose and silent build modes
+ifeq ($(V),)
+HIDE=@
+endif
+
 ifneq ($(RELEASE),)
 CFLAGS  += -DRELEASE
 OPT_SPEED=1
